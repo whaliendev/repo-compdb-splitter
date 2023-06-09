@@ -6,8 +6,8 @@
 clang-based tool to parse C/C++ sources
 - [git-repo](https://gerrit.googlesource.com/git-repo) is a VCS developed by google to manage multi git controlled repo
 
-In the Google [AOSP](https://source.android.com/) project, we use the `git-repo` tool to manage thousands of subprojects controlled by git. 
-When we need to generate a `compile_commands.json` file to different C/C++ subprojects, we use the 
+In Google [AOSP](https://source.android.com/), they use `git-repo` to manage thousands of subprojects controlled by git. 
+When we need to generate `compile_commands.json` files for different C/C++ subprojects, we use
 [compiledb](https://github.com/nickdiego/compiledb) tool to parse build logs and generate a complete `CompilationDatabase`. 
 However, this complete CompilationDatabase is generated for the entire AOSP project, 
 and loading this file into memory using a clang-based tool is very expensive and time-consuming. 
