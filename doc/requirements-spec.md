@@ -42,14 +42,15 @@
 ]
 ```
 
-整个文件是一个Array<CompileCommand>。也就是说，是一个填充`CompileCommand`的数组。每个compile command有四个字段，具体的内容见LLVM的data
+整个文件是一个Array of CompileCommand。也就是说，是一个填充`CompileCommand`的数组。每个compile command有四个字段，具体的内容见LLVM的data
 schema说明和项目根目录下的`model/compdb.go`文件中的data model。
+
 CompDB常见的生成方式： https://sarcasm.github.io/notes/dev/compilation-database.html
 其中比较重要的，我们关注的有下面几个：
 
-+ cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON, 由于cmake已成为C++开源的事实标准，所以很多开源项目我们使用这种方式构建
-+ compiledb 一个python写的生成C++ compile db的工具，可以不build直接生成，也可以解析项目的构建日志进行compdb生成。
-+ bear 这个工具可以拦截C++/C的编译过程，在其他工具无法不构建生成compdb的情况下，bear往往是最后的考虑。
++ `cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ...`    由于cmake已成为C++开源的事实标准，所以很多开源项目我们使用这种方式构建
++ `compiledb`    一个python写的生成C++ compDB的工具，可以不build直接生成`compile_commands.json`，也可以解析项目的构建日志进行compdb生成。
++ `bear`    这个工具可以拦截C++/C的编译过程，在其他工具无法不构建生成compdb的情况下，bear往往是最后的考虑。
 
 #### AOSP
 
@@ -87,9 +88,10 @@ AOSP项目下由工具repo管理着1000多个子项目，如根目录下：
 ├── tools
 └── WORKSPACE -> build/bazel/bazel.WORKSPACE
 ```
+其中每个目录下基本上都存在多个git仓库，而这些仓库在一起组成了整个AOSP项目。
 
 并且采用如下的方式进行构建： https://source.android.com/docs/setup/build/building
-（主要就是source build/envsetup.sh后mm从根开始构建和mma构建当前子项目和其依赖）
+（主要就是source build/envsetup.sh后mm：从根开始构建和mma：构建当前子项目和其依赖）
 
 在安卓中，我们也可以采用如下方式进行CompDB生成： https://android.googlesource.com/platform/build/soong/+/HEAD/docs/compdb.md
 
@@ -97,14 +99,14 @@ AOSP项目下由工具repo管理着1000多个子项目，如根目录下：
 
 考虑和OPPO交付项目对可用性要求比较高，我们计划采用[compiledb](https://github.com/nickdiego/compiledb)
 这个工具通过解析项目中已存在的构建日志进行compdb的生成。
-主要是其中的：
+主要是compiledb项目README中的：
 
 ```shell
 compiledb --parse build-log.txt
 ```
 
-在AOSP项目中，即在根目录下采用`mm`进行全量编译后 采用`compiledb --parse out/verbose.log`
-。但是通过这种方式造成的问题是，生成的`compile_commands.json`
+在AOSP项目中，我们在根目录下采用`mm`进行全量编译后 采用`compiledb --parse out/verbose.log`生成`compile_commands.json`
+。但是通过这种方式生成存在的问题是：生成的`compile_commands.json`
 是针对整个AOSP项目的，但我们要做程序分析的是单个git项目，为单个项目加载整个compile_commands.json进内存显然是非常不划算和低效的。所以我们需要开发这个小工具进行compdb的匹配，拆分、分发和清理。
 
 ### 具体思路
@@ -156,8 +158,7 @@ compiledb --parse build-log.txt
 </manifest>
 ```
 
-可以看到每个项目有个path字段（相对路径），name字段（名称）等。我们可以考虑采用正则表达式(RE)解析这个文件获取这些project
-item，然后对相对路径中的segment构建Trie Tree。
+可以看到每个项目（xml中的project）有个path字段（相对路径），name字段（名称）等。我们可以考虑采用正则表达式(RE)解析这个文件获取这些projects，然后对相对路径中的path segment构建Trie Tree。
 
 2. 下面是生成的compile_commands.json的部分例子：
 
@@ -401,7 +402,8 @@ item，然后对相对路径中的segment构建Trie Tree。
 - file: 相对于directory的相对路径
 - arguments (optional): 编译命令数组
 - command (optional): 编译命令
-  我们可以提取file字段中的这个相对路径，在第一步构建的Trie Tree中进行查找，将某个Compile Command分配到某个项目的
+  
+我们可以提取file字段中的相对路径，在第一步构建的Trie Tree中进行查找，将某个Compile Command分配到某个git子项目的
   `build/compile_commands.json`文件里。
 
 ### 具体需求
@@ -409,7 +411,8 @@ item，然后对相对路径中的segment构建Trie Tree。
 1. 要求解析的输入manifests.xml可以有多个，或者为某个目录下的xml文件。相同的项目后面文件中的覆盖前面文件中的。
 2. 快。可以看实现难度压榨多核性能。
 3. 解析manifests.xml，匹配manifests.xml中的子项目，拆分compile
-   commands，分发到不同的子项目中去。每次独立运行如果目标路径已有目标文件，覆盖该文件，并打log和清理运行后写入的所有compile_commands.json
-   （即使运行失败，我们也要能清理已经产生的compile_commands.json和对消除子仓库的侵入性）。
-4. 运行日志清晰。
+   commands，分发到不同的子项目中去。每次独立运行如果目标路径已有目标文件，覆盖该文件，并打log；
+4. 可以清理运行后写入的所有compile_commands.json
+   （即使运行失败，我们也要能清理已经产生的compile_commands.json和消除对子仓库的侵入性）。
+5. 运行日志清晰。
 
