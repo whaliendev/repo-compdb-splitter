@@ -1,0 +1,31 @@
+# Editors
+*.sw*
+/.vs
+/.idea
+/.vscode
+/.cache
+CMakeSettings.json
+CMakeUserPresets.json
+.vim_localrc
+CMakeLists.txt.user
+.DS_Store
+
+# cmake files
+build
+cmake-build-*/
+Debug/
+Release/
+.xmake/
+out/
+
+compile_commands.json
+logs
+
+# python env
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
