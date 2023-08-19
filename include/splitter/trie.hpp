@@ -9,7 +9,7 @@
 #include "splitter/filesystem.h"
 
 namespace splitter {
-class Trie {
+class Trie /* : noncopyable */ {
  public:
   Trie() : root_(new TrieNode()) {}
 
@@ -22,6 +22,8 @@ class Trie {
 
   ~Trie() { deleteTrie(root_); };
 
+  /// @brief insert a path into trie tree
+  /// @param path directory path
   void Insert(const std::string& path) {
     std::string mut_path = path;
 
@@ -43,6 +45,9 @@ class Trie {
     current->end = true;
   }
 
+  /// @brief search prefix of file path in trie tree
+  /// @param path file path to be searched
+  /// @return prefix in trie tree
   std::string SearchPrefix(std::string_view path) const {
     fs::path prefix;
 
@@ -59,6 +64,9 @@ class Trie {
     return prefix;
   }
 
+  /// @brief search if a directory path is in the trie tree
+  /// @param path the directory path
+  /// @return true if found, false otherwise
   bool Search(std::string_view path) const {
     TrieNode* current = root_;
     fs::path dir_path = fs::path(path);
