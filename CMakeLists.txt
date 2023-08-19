@@ -9,6 +9,10 @@ option(SP_BUILD_TESTS "build tests" OFF)
 option(SP_BUILD_SHARED_LIBS "build shared libraries" OFF)
 option(SP_USE_CCACHE "use ccache to accelarate compilation if ccache found in path" ON)
 
+if(PROJECT_NAME STREQUAL CMAKE_PROJECT_NAME)
+    set(SP_BUILD_TESTS ON)
+endif(PROJECT_NAME STREQUAL CMAKE_PROJECT_NAME)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH} ")
 set(CMAKE_LINK_WHAT_YOU_USE ON)
@@ -84,6 +88,14 @@ if(SP_USE_CCACHE AND NOT MSVC)
     endif(CCACHE_PROGRAM)
 endif(SP_USE_CCACHE AND NOT MSVC)
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC") # MSVC
+    # non standard warning,member function not override any super class members,
+    # non-virtual-dtor
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /permissive /w14263 /w14265")
+else(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC") # clang and gcc
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+endif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+
 if(SP_BUILD_SHARED_LIBS)
     # Only export SP_EXPORT symbols from the shared library.
     add_compile_options(-fvisibility=hidden)
@@ -102,10 +114,26 @@ find_package(args REQUIRED)
 find_package(rapidxml REQUIRED)
 
 add_executable(${PROJECT_NAME}
-    ${PROJECT_SOURCE_DIR}/main.cpp)
+    src/main.cpp
+    src/commands.cpp
+    include/splitter/consts.h
+    include/splitter/commands.h
+    include/splitter/util.hpp
+    include/splitter/trie.hpp
+    include/splitter/filesystem.h)
 
 target_link_libraries(${PROJECT_NAME}
     rapidjson
     onetbb::onetbb
     taywee::args
     rapidxml::rapidxml)
+
+if(SP_BUILD_TESTS)
+    message(STATUS "Tests enabled for db-splitter")
+    include(cmake/googletest.cmake)
+
+    enable_testing()
+    add_subdirectory("third_party/googletest")
+    include_directories(${gtest_SOURCE_DIR}/include)
+    add_subdirectory(tests)
+endif(SP_BUILD_TESTS)
