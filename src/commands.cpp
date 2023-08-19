@@ -1,11 +1,24 @@
 #include "splitter/commands.h"
 
+#include <oneapi/tbb.h>
+#include <rapidjson/document.h>
+#include <rapidjson/filewritestream.h>
+#include <rapidjson/writer.h>
+
+#ifdef SP_WITH_MMAP
+#include "mio/mio.hpp"
+#else
+#include <rapidjson/filereadstream.h>
+#endif
+
 #include <args.hxx>
 #include <cassert>
 
 #include "splitter/consts.h"
 #include "splitter/filesystem.h"
+#include "splitter/trie.hpp"
 #include "splitter/util.hpp"
+#include "splitter/xml_trie.hpp"
 
 namespace splitter {
 namespace _details {
@@ -18,13 +31,14 @@ std::vector<std::string> parseManifestFiles(
     for (const auto& manifest : manifest_files) {
       fs::path manifest_file = fs::path(manifest);
       if (!fs::exists(manifest_file)) {
-        fprintf(stderr, "error parsing repo manifest file: %s dosn't exist",
+        fprintf(stderr, "error parsing repo manifest file: %s dosn't exist\n",
                 manifest.c_str());
         exit(splitter::ErrNotExist);
       }
 
       if (!EndsWith(manifest, ".xml")) {
-        fprintf(stderr, "error paring repo manifest file: %s is not a xml file",
+        fprintf(stderr,
+                "error paring repo manifest file: %s is not a xml file\n",
                 manifest.c_str());
         exit(splitter::ErrNotValid);
       }
@@ -35,7 +49,7 @@ std::vector<std::string> parseManifestFiles(
     if (!fs::exists(fs::path(folder)) || !fs::is_directory(fs::path(folder))) {
       fprintf(stderr,
               "error paring repo manifests folder: %s doesn't exist or isn't a "
-              "folder",
+              "folder\n",
               manifest_folder->c_str());
       exit(splitter::ErrNotValid);
     }
@@ -78,46 +92,125 @@ void SplitCommand(args::Subparser& parser) {
 
   parser.Parse();
 
-  fprintf(stdout, "parsing split subcommand...");
+  fprintf(stdout, "parsing split subcommand...\n");
   std::vector<std::string> manifest_files =
       _details::parseManifestFiles(manifests, manifest_folder);
-  fprintf(stdout, "manifestt files vector size: %lu, first one: %s",
+  fprintf(stdout, "manifestt files vector size: %lu, first one: %s\n",
           manifest_files.size(), manifest_files[0].c_str());
 
   const std::string cdb_file = fs::path(args::get(CDB_path));
   if (!fs::exists(cdb_file) || !fs::is_regular_file(cdb_file) ||
       fs::path(cdb_file).extension() != ".json") {
-    fprintf(stderr, "error paring cdb path: %s is illegal", cdb_file.c_str());
+    fprintf(stderr, "error paring cdb path: %s is illegal\n", cdb_file.c_str());
     exit(splitter::ErrNotValid);
   }
-  fprintf(stdout, "cdb_file path: %s", cdb_file.c_str());
+  fprintf(stdout, "cdb_file path: %s\n", cdb_file.c_str());
 
   const std::string dest_folder = fs::path(args::get(dest));
-  if (!fs::is_directory(dest_folder)) {
-    fprintf(stderr, "error paring destination folder: %s is illegal",
+  if (!fs::exists(dest_folder)) {
+    fs::create_directories(dest_folder);
+  } else if (!fs::is_directory(dest_folder)) {
+    fprintf(stderr, "error paring destination folder: %s is illegal\n",
             dest_folder.c_str());
     exit(splitter::ErrNotValid);
   }
   if (!fs::is_empty(dest_folder)) {
     fs::remove_all(dest_folder);
   }
-  if (!fs::exists(dest_folder)) {
-    fs::create_directories(dest_folder);
-  }
-  fprintf(stdout, "dest_folder path: %s", dest_folder.c_str());
+  fprintf(stdout, "dest_folder path: %s\n", dest_folder.c_str());
 
-  int res = splitter::DoSplitCommand(manifest_files, cdb_file, dest_folder);
+  auto duration =
+      MeasureRunningTime(DoSplitCommand, manifest_files, cdb_file, dest_folder);
 
-  if (res != 0) {
-    fprintf(stderr, "error occurs doing split command");
-    exit(res);
-  }
+  fprintf(
+      stdout,
+      "\n************** Stat **************\n\nit takes %ld ms to split cdb\n",
+      duration);
 }
 }  // end of namespace commands
 
 int DoSplitCommand(const std::vector<std::string>& manifest_files,
                    const std::string& cdb_file,
                    const std::string& dest_folder) {
+  Trie trie = BuildFromXMLs(manifest_files);
+
+#ifdef NDEBUG
+  printf("trie tree: \n%s", trie.ToString().c_str());
+#endif
+
+#ifdef SP_WITH_MMAP
+  fprintf(stdout, "mmap found, using mmap to parse cdb file\n");
+  std::error_code error;
+  mio::mmap_source mmap =
+      mio::make_mmap_source(cdb_file, 0, mio::map_entire_file, error);
+  if (error) {
+    fprintf(stderr, "error mapping cdb file: %s\n", error.message().c_str());
+    return ErrNotValid;
+  }
+  rapidjson::StringStream ss(mmap.data());
+  rapidjson::Document doc;
+  long parse_elapsed = MeasureRunningTime([&]() { doc.ParseStream(ss); });
+  fprintf(stdout, "it takes %ld ms to parse cdb\n", parse_elapsed);
+#else  // SP_WITH_MMAP
+  fprintf(stdout,
+          "mmap not found, using rapidjson FileReadStream to parse cdb file\n");
+#ifdef _WIN32
+  FILE* fp = fopen(cdb_file.c_str(), "rb");
+#else
+  FILE* fp = fopen(cdb_file.c_str(), "r");
+#endif
+
+  char read_buf[2 << 15];
+  rapidjson::FileReadStream is(fp, read_buf, sizeof(read_buf));
+
+  rapidjson::Document doc;
+  long parse_elapsed = MeasureRunningTime([&]() { doc.ParseStream(is); });
+  fprintf(stdout, "it takes %ld ms to parse cdb\n", parse_elapsed);
+#endif  // end of SP_WITH_MMAP
+
+  assert(doc.IsArray() && "schema of compile_commands.json should be an array");
+
+  const auto& command_arr = doc.GetArray();
+  fprintf(stdout, "size of compile commands array is %u\n", command_arr.Size());
+
+  std::unordered_map<std::string, rapidjson::Value> commands_map;
+
+  long processing_elpased = MeasureRunningTime([&]() {
+    std::for_each(command_arr.Begin(), command_arr.End(), [&](auto& command) {
+      const auto prefix = trie.SearchPrefix(command["file"].GetString());
+      fs::path commands_dest = fs::path(dest_folder) / prefix;
+      if (!fs::exists(commands_dest)) {
+        fs::create_directories(commands_dest);
+      }
+      commands_dest /= "compile_commands.json";
+      if (commands_map.find(commands_dest.string()) == commands_map.end()) {
+        commands_map[commands_dest.string()] =
+            rapidjson::Value(rapidjson::kArrayType);
+      }
+      commands_map[commands_dest.string()].PushBack(command,
+                                                    doc.GetAllocator());
+    });
+  });
+  fprintf(stdout, "it takes %ld ms to process cdb\n", processing_elpased);
+
+  long write_elapsed = MeasureRunningTime([&]() {
+    oneapi::tbb::parallel_for_each(
+        commands_map.begin(), commands_map.end(), [&](const auto& file) {
+          const auto& [dest, commands] = file;
+#ifdef _WIN32
+          FILE* fp = fopen(dest.c_str(), "wb");
+#else
+          FILE* fp = fopen(dest.c_str(), "w");
+#endif
+          char write_buf[2 << 15];
+          rapidjson::FileWriteStream os(fp, write_buf, sizeof(write_buf));
+          rapidjson::Writer<rapidjson::FileWriteStream> writer(os);
+          commands.Accept(writer);
+          fclose(fp);
+        });
+  });
+  fprintf(stdout, "it takes %ld ms to write output\n", write_elapsed);
+
   return 0;
 }
 

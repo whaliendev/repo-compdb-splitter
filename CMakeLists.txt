@@ -8,6 +8,7 @@ option(SP_OUT_TO_BIN "output all target files to build/bin" ON)
 option(SP_BUILD_TESTS "build tests" OFF)
 option(SP_BUILD_SHARED_LIBS "build shared libraries" OFF)
 option(SP_USE_CCACHE "use ccache to accelarate compilation if ccache found in path" ON)
+option(SP_USE_MMAP "use mmap to read files" ON)
 
 if(PROJECT_NAME STREQUAL CMAKE_PROJECT_NAME)
     set(SP_BUILD_TESTS ON)
@@ -16,6 +17,8 @@ endif(PROJECT_NAME STREQUAL CMAKE_PROJECT_NAME)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH} ")
 set(CMAKE_LINK_WHAT_YOU_USE ON)
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 
 # C++ standard can also be overridden when this is used as a sub-project
 if(NOT CMAKE_CXX_STANDARD)
@@ -37,8 +40,18 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif(NOT CMAKE_BUILD_TYPE)
 
+if(SP_USE_MMAP)
+    add_compile_definitions(SP_WITH_MMAP)
+endif(SP_USE_MMAP)
+
 message(STATUS "Build directory: ${PROJECT_BINARY_DIR}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "CXX FLAGS: ${CMAKE_CXX_FLAGS_DEBUG}")
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    message(STATUS "CXX FLAGS: ${CMAKE_CXX_FLAGS_RELEASE}")
+endif(CMAKE_BUILD_TYPE STREQUAL "Debug")
 
 # ## conventions we need to follow
 if(PROJECT_BINARY_DIR STREQUAL PROJECT_SOURCE_DIR)
