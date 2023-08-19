@@ -1,9 +1,6 @@
 #include <args.hxx>
-#include <cstdio>
-#include <filesystem>
 
 #include "splitter/commands.h"
-#include "splitter/consts.h"
 
 args::Group arguments("arguments");
 args::HelpFlag help(arguments, "help", "display global help menu",
@@ -29,6 +26,10 @@ int main(int argc, char** argv) {
     std::cout << parser;
     return 0;
   } catch (const args::ParseError& e) {
+    std::cerr << e.what() << std::endl;
+    std::cerr << parser;
+    return 1;
+  } catch (const args::Error& e) {
     std::cerr << e.what() << std::endl;
     std::cerr << parser;
     return 1;
