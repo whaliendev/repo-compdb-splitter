@@ -17,8 +17,14 @@ endif(PROJECT_NAME STREQUAL CMAKE_PROJECT_NAME)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH} ")
 set(CMAKE_LINK_WHAT_YOU_USE ON)
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+
+if(MSVC)
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Ob2 /Oi /Ot /Oy /GL /GS- /fp:fast /fp:except- /MD /Gw /Zc:forScope /Zc:wchar_t /Zc:inline /Zc:__cplusplus /errorReport:prompt")
+    set(CMAKE_CXX_FLAGS_DEBUG "/Od /Ob0 /Oi /Ot /Oy- /MDd /Gw /Zc:forScope /Zc:wchar_t /Zc:inline /Zc:__cplusplus /errorReport:prompt")
+else(MSVC)
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+endif(MSVC)
 
 # C++ standard can also be overridden when this is used as a sub-project
 if(NOT CMAKE_CXX_STANDARD)
@@ -60,16 +66,17 @@ if(PROJECT_BINARY_DIR STREQUAL PROJECT_SOURCE_DIR)
         "Otherwise mergebot may fail to build, or make Git hard to exclude binary files.")
 endif(PROJECT_BINARY_DIR STREQUAL PROJECT_SOURCE_DIR)
 
-# ## solve compatibility problems
-# if(WIN32)
-# set(SP_PLATFORM_NAME SP_PLATFORM_WINDOWS)
+# # solve compatibility problems
+if(WIN32)
+    set(SP_PLATFORM_NAME SP_PLATFORM_WINDOWS)
 
-# # get rid of 'min', 'max' macros; get back 'M_PI', 'M_E'
-# add_definitions(-DNOMINMAX -D_USE_MATH_DEFINES)
-# add_definitions(-D_UNICODE -DUNICODE)
-# else(WIN32)
-# set(SP_PLATFORM_NAME SP_PLATFORM_POSIX)
-# endif(WIN32)
+    # get rid of 'min', 'max' macros; get back 'M_PI', 'M_E'
+    add_definitions(-DNOMINMAX -D_USE_MATH_DEFINES)
+    add_definitions(-D_UNICODE -DUNICODE)
+else(WIN32)
+    set(SP_PLATFORM_NAME SP_PLATFORM_POSIX)
+endif(WIN32)
+
 if(SP_OUT_TO_BIN)
     # Otherwise Windows (which doesn't support RPATH) cannot find the DLLs at runtime
     set(SP_OUTPUT_DIR ${PROJECT_BINARY_DIR}/bin)

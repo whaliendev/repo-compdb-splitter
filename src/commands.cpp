@@ -56,7 +56,7 @@ std::vector<std::string> parseManifestFiles(
 
     for (const auto& entry : fs::directory_iterator(folder)) {
       if (entry.is_regular_file() && entry.path().extension() == ".xml") {
-        manifest_files.emplace_back(entry.path().c_str());
+        manifest_files.emplace_back(entry.path().string());
         if (manifest_files.size() >= splitter::MANIFEST_FILES_LIMIT_SIZE) {
           break;
         }
@@ -98,7 +98,7 @@ void SplitCommand(args::Subparser& parser) {
   fprintf(stdout, "manifestt files vector size: %lu, first one: %s\n",
           manifest_files.size(), manifest_files[0].c_str());
 
-  const std::string cdb_file = fs::path(args::get(CDB_path));
+  const std::string cdb_file = args::get(CDB_path);
   if (!fs::exists(cdb_file) || !fs::is_regular_file(cdb_file) ||
       fs::path(cdb_file).extension() != ".json") {
     fprintf(stderr, "error paring cdb path: %s is illegal\n", cdb_file.c_str());
@@ -106,7 +106,7 @@ void SplitCommand(args::Subparser& parser) {
   }
   fprintf(stdout, "cdb_file path: %s\n", cdb_file.c_str());
 
-  const std::string dest_folder = fs::path(args::get(dest));
+  const std::string dest_folder = args::get(dest);
   if (!fs::exists(dest_folder)) {
     fs::create_directories(dest_folder);
   } else if (!fs::is_directory(dest_folder)) {

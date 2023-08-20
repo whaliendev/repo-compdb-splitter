@@ -2,6 +2,7 @@
 #define _SPLITTER_TRIE_HPP_
 
 #include <algorithm>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -33,7 +34,7 @@ class Trie /* : noncopyable */ {
 
     fs::path dir_path = fs::path(mut_path);
     for (const auto& segment : dir_path) {
-      const char* segmentStr = segment.c_str();
+      const std::string segmentStr = segment.string();
       if (current->children.find(segmentStr) == current->children.end()) {
         current->children[segmentStr] = new TrieNode();
       } else {
@@ -54,7 +55,7 @@ class Trie /* : noncopyable */ {
     TrieNode* current = root_;
     fs::path dir_path = fs::path(path);
     for (const auto& segment : dir_path) {
-      const char* segmentStr = segment.c_str();
+      const std::string segmentStr = segment.string();
       if (current->children.find(segmentStr) == current->children.end()) {
         return prefix;
       }
@@ -71,7 +72,7 @@ class Trie /* : noncopyable */ {
     TrieNode* current = root_;
     fs::path dir_path = fs::path(path);
     for (const auto& segment : dir_path) {
-      const char* segmentStr = segment.c_str();
+      const std::string segmentStr = segment.string();
       if (current->children.find(segmentStr) == current->children.end()) {
         return false;
       }
