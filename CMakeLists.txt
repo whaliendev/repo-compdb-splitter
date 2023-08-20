@@ -18,14 +18,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH} ")
 set(CMAKE_LINK_WHAT_YOU_USE ON)
 
-if(MSVC)
-    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Ob2 /Oi /Ot /Oy /GL /GS- /fp:fast /fp:except- /MD /Gw /Zc:forScope /Zc:wchar_t /Zc:inline /Zc:__cplusplus /errorReport:prompt")
-    set(CMAKE_CXX_FLAGS_DEBUG "/Od /Ob0 /Oi /Ot /Oy- /MDd /Gw /Zc:forScope /Zc:wchar_t /Zc:inline /Zc:__cplusplus /errorReport:prompt")
-else(MSVC)
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
-endif(MSVC)
-
 # C++ standard can also be overridden when this is used as a sub-project
 if(NOT CMAKE_CXX_STANDARD)
     # we can use all C++17 features in this project
@@ -111,9 +103,17 @@ endif(SP_USE_CCACHE AND NOT MSVC)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC") # MSVC
     # non standard warning,member function not override any super class members,
     # non-virtual-dtor
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /permissive /w14263 /w14265")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /permissive /w14263 /w14265 /W4")
 else(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC") # clang and gcc
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+endif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Ob2 /Oi /Ot /GL /GS- /fp:fast /fp:except- /MD /Gw /Zc:forScope /Zc:wchar_t /Zc:inline /Zc:__cplusplus")
+    set(CMAKE_CXX_FLAGS_DEBUG "/Od /Ob0 /Oi /Ot /Oy- /MDd /Gw /Zc:forScope /Zc:wchar_t /Zc:inline /Zc:__cplusplus")
+else(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 endif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 
 if(SP_BUILD_SHARED_LIBS)
