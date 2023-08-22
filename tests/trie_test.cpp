@@ -4,6 +4,7 @@
 
 #include <iostream>
 
+// weak test
 TEST(Trie, ToStringUnix) {
   std::vector<std::string> paths{"/usr/include",
                                  "/bin",
