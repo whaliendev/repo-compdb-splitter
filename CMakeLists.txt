@@ -67,6 +67,7 @@ if(WIN32)
     add_definitions(-D_UNICODE -DUNICODE)
 else(WIN32)
     set(SP_PLATFORM_NAME SP_PLATFORM_POSIX)
+    add_compile_definitions(SP_USE_OS_API)
 endif(WIN32)
 
 if(SP_OUT_TO_BIN)

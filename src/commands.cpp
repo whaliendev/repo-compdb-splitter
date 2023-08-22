@@ -1,5 +1,13 @@
 #include "splitter/commands.h"
 
+#if defined(__SSE4_2__)
+#define RAPIDJSON_SSE42
+#elif defined(__SSE2__)
+#define RAPIDJSON_SSE2
+#elif defined(__ARM_NEON)
+#define RAPIDJSON_NEON
+#endif
+
 #include <oneapi/tbb.h>
 #include <rapidjson/document.h>
 #include <rapidjson/filewritestream.h>
@@ -19,6 +27,10 @@
 #include "splitter/trie.hpp"
 #include "splitter/util.hpp"
 #include "splitter/xml_trie.hpp"
+
+#ifndef _WIN32
+#include <sys/mman.h>
+#endif
 
 namespace splitter {
 namespace _details {
@@ -95,7 +107,7 @@ void SplitCommand(args::Subparser& parser) {
   fprintf(stdout, "parsing split subcommand...\n");
   std::vector<std::string> manifest_files =
       _details::parseManifestFiles(manifests, manifest_folder);
-  fprintf(stdout, "manifestt files vector size: %lu, first one: %s\n",
+  fprintf(stdout, "manifest files vector size: %lu, first element: %s\n",
           manifest_files.size(), manifest_files[0].c_str());
 
   const std::string cdb_file = args::get(CDB_path);
@@ -138,6 +150,24 @@ int DoSplitCommand(const std::vector<std::string>& manifest_files,
   printf("trie tree: \n%s", trie.ToString().c_str());
 #endif
 
+#ifdef SP_USE_OS_API
+#ifdef _WIN32
+  assert(false && "not implemented yet");
+#endif
+
+  fprintf(
+      stdout,
+      "on unix platform, use mmap `MAP_PRIVATE` to do inplace json parse\n");
+  size_t file_size = 0;
+  char* buffer = MmapLargeFile(cdb_file, file_size);
+  if (buffer == nullptr) {
+    fprintf(stderr, "error mapping cdb file: %s\n", cdb_file.c_str());
+    return ErrNotValid;
+  }
+  rapidjson::Document doc;
+  long parse_elapsed = MeasureRunningTime([&]() { doc.ParseInsitu(buffer); });
+  fprintf(stdout, "it takes %ld ms to parse cdb\n", parse_elapsed);
+#else  // SP_USE_OS_API
 #ifdef SP_WITH_MMAP
   fprintf(stdout, "mmap found, using mmap to parse cdb file\n");
   std::error_code error;
@@ -165,8 +195,9 @@ int DoSplitCommand(const std::vector<std::string>& manifest_files,
 
   rapidjson::Document doc;
   long parse_elapsed = MeasureRunningTime([&]() { doc.ParseStream(is); });
-  fprintf(stdout, "it takes %ld ms to parse cdb\n", parse_elapsed);
+
 #endif  // end of SP_WITH_MMAP
+#endif  // end of SP_USE_OS_API
 
   assert(doc.IsArray() && "schema of compile_commands.json should be an array");
 
@@ -176,7 +207,7 @@ int DoSplitCommand(const std::vector<std::string>& manifest_files,
   std::unordered_map<std::string, rapidjson::Value> commands_map;
 
   long processing_elpased = MeasureRunningTime([&]() {
-    std::for_each(command_arr.Begin(), command_arr.End(), [&](auto& command) {
+    for (auto& command : command_arr) {
       const auto prefix = trie.SearchPrefix(command["file"].GetString());
       fs::path commands_dest = fs::path(dest_folder) / prefix;
       if (!fs::exists(commands_dest)) {
@@ -187,9 +218,9 @@ int DoSplitCommand(const std::vector<std::string>& manifest_files,
         commands_map[commands_dest.string()] =
             rapidjson::Value(rapidjson::kArrayType);
       }
-      commands_map[commands_dest.string()].PushBack(command,
+      commands_map[commands_dest.string()].PushBack(command.Move(),
                                                     doc.GetAllocator());
-    });
+    }
   });
   fprintf(stdout, "it takes %ld ms to process cdb\n", processing_elpased);
 
@@ -210,6 +241,13 @@ int DoSplitCommand(const std::vector<std::string>& manifest_files,
         });
   });
   fprintf(stdout, "it takes %ld ms to write output\n", write_elapsed);
+
+#ifdef SP_USE_OS_API
+  if (munmap(buffer, file_size) == -1) {
+    fprintf(stderr, "error unmapping memory");
+    return ErrUnknown;
+  }
+#endif
 
   return 0;
 }
