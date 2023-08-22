@@ -28,7 +28,7 @@ class DBSplitterConan(ConanFile):
 
     default_options = {
         "fPIC": True,
-        "onetbb/*:shared": False,
+        "onetbb/*:shared": False,   # on Windows, shared lib cannot be linked
         "onetbb/*:fPIC": True,
         "onetbb/*:tbbmalloc": True,
         "onetbb/*:tbbproxy": True,
