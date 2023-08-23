@@ -21,7 +21,8 @@ pip install conan
 ```
 
 -   Initialization
-    Generate a default conan2 profile first:
+
+Generate a default conan2 profile first:
 
 ```shell
 conan profile detect --force
@@ -49,4 +50,44 @@ conan install . --build=missing -r=conancenter -s build_type=[Release | RelWithD
 ```shell
 cmake --preset [conan-debug | conan-release]
 cmake --build build/[Debug | Release]
+```
+
+### Usage
+
+-   General
+
+```shell
+  ./build/Release/bin/db-splitter COMMAND {OPTIONS}
+
+    a program to split CDB of repo managed C/C++ projects
+
+  OPTIONS:
+
+      commands
+        split                             command to split CDB
+      arguments
+        -h, --help                        display global help menu
+```
+
+-   Split
+
+```shell
+  ./build/Release/bin/db-splitter split {OPTIONS} [destination]
+
+    command to split CDB
+
+  OPTIONS:
+
+      repo manifests file group
+        -x[manifests...],
+        --xml=[manifests...]              repo manifest files
+        -d[manifests directory],
+        --dir=[manifests directory]       repo manifests directory
+      -c[path], --cdb=[path]            path of compile_commands.json to be
+                                        splitted
+      destination                       destination folder to store splitted CDB
+      -h, --help                        display global help menu
+      "--" can be used to terminate flag options and force all following
+      arguments to be treated as positional options
+
 ```
