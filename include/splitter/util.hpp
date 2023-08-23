@@ -18,14 +18,32 @@
 #endif
 
 namespace splitter {
+
 template <typename Func, typename... Args>
-static typename std::enable_if<std::is_invocable_v<Func, Args...>, long>::type
-MeasureRunningTime(Func&& func, Args&&... args) {
-  auto start = std::chrono::high_resolution_clock::now();
-  std::invoke(std::forward<Func>(func), std::forward<Args>(args)...);
-  auto end = std::chrono::high_resolution_clock::now();
-  return std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-      .count();
+static auto MeasureRunningTime(Func&& func, Args&&... args) {
+  // Check if the function is invocable with the given arguments
+  static_assert(std::is_invocable_v<Func, Args...>,
+                "Func is not invocable with the provided arguments");
+
+  using FuncReturnType = std::invoke_result_t<Func, Args...>;
+
+  auto start = std::chrono::steady_clock::now();
+  if constexpr (std::is_same_v<FuncReturnType, void>) {
+    std::invoke(std::forward<Func>(func), std::forward<Args>(args)...);
+    auto end = std::chrono::steady_clock::now();
+    long elapsed_time =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+    return elapsed_time;
+  } else {
+    FuncReturnType result =
+        std::invoke(std::forward<Func>(func), std::forward<Args>(args)...);
+    auto end = std::chrono::steady_clock::now();
+    long elapsed_time =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+    return std::tuple<long, FuncReturnType>(elapsed_time, result);
+  }
 }
 
 static bool EndsWith(std::string_view sv, const std::string_view suffix) {
@@ -40,7 +58,7 @@ static bool EndsWith(std::string_view sv, const std::string_view suffix) {
 /// free the returned string.
 /// @param file_path The path to the file to read.
 /// @return The contents of the file, or nullptr if there was an error.
-static char* ReadLargeFile(const std::string& file_path) {
+[[maybe_unused]] static char* ReadLargeFile(const std::string& file_path) {
   FILE* fp = fopen(file_path.c_str(), "rb");
   if (!fp) {
     fprintf(stderr, "error opening file: %s\n", file_path.c_str());
@@ -70,7 +88,8 @@ static char* ReadLargeFile(const std::string& file_path) {
 /// @param file_path the path to the file to read.
 /// @param file_size out parameter, the size of the file.
 /// @return the mapped file, or nullptr if there was an error.
-static char* MmapLargeFile(const std::string& file_path, size_t& file_size) {
+[[maybe_unused]] static char* MmapLargeFile(const std::string& file_path,
+                                            size_t& file_size) {
 #ifdef _WIN32
   assert(false && "not implemented");
 #endif

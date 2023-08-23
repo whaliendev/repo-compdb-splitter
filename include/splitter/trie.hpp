@@ -57,12 +57,12 @@ class Trie /* : noncopyable */ {
     for (const auto& segment : dir_path) {
       const std::string segmentStr = segment.string();
       if (current->children.find(segmentStr) == current->children.end()) {
-        return prefix;
+        return prefix.string();
       }
       prefix = prefix / segmentStr;
       current = current->children[segmentStr];
     }
-    return prefix;
+    return prefix.string();
   }
 
   /// @brief search if a directory path is in the trie tree
