@@ -150,7 +150,7 @@ int DoSplitCommand(const std::vector<std::string>& manifest_files,
                    const std::string& dest_folder) {
   Trie trie = BuildFromXMLs(manifest_files);
 
-#ifdef NDEBUG
+#ifndef NDEBUG
   printf("trie tree: \n%s\n", trie.ToString().c_str());
 #endif
 

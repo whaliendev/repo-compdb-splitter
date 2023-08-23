@@ -49,6 +49,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "CXX FLAGS: ${CMAKE_CXX_FLAGS_DEBUG}")
 elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
     message(STATUS "CXX FLAGS: ${CMAKE_CXX_FLAGS_RELEASE}")
+    add_compile_definitions(NDEBUG)
 endif(CMAKE_BUILD_TYPE STREQUAL "Debug")
 
 # ## conventions we need to follow
