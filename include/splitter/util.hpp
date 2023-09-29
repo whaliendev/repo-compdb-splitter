@@ -118,6 +118,40 @@ static bool EndsWith(std::string_view sv, const std::string_view suffix) {
   close(fd);
   return buffer;
 }
+
+static std::string string_replace(const std::string& input,
+                                  std::string_view old_value,
+                                  std::string_view new_value, int k = -1) {
+  if (old_value.empty()) {
+    return input;
+  }
+
+  std::string result;
+  result.reserve(input.size());  // 预分配内存以提高效率
+
+  std::string_view current(input);
+  size_t pos = 0;
+
+  while (k != 0 && (pos = current.find(old_value)) != std::string_view::npos) {
+    result.append(current.data(), pos);
+    result.append(new_value);
+    current.remove_prefix(pos + old_value.size());
+    if (k > 0) {
+      k--;
+    }
+  }
+
+  result.append(current);  // 添加剩余部分
+  return result;
+}
+
+static bool string_starts_with(std::string_view input,
+                               std::string_view prefix) {
+  if (input.size() < prefix.size()) {
+    return false;
+  }
+  return input.compare(0, prefix.size(), prefix) == 0;
+}
 }  // namespace splitter
 
 #endif  // _SPLITTER_UTIL_HPP_

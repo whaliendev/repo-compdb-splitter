@@ -96,6 +96,9 @@ void SplitCommand(args::Subparser& parser) {
   args::ValueFlag<std::string> manifest_folder(
       group, "manifests directory", "repo manifests directory", {'d', "dir"});
 
+  args::ValueFlag<std::string> aosp_base_path(
+      parser, "AOSP base directory", "AOSP base directory", {'b', "base"});
+
   args::ValueFlag<std::string> CDB_path(
       parser, "path", "path of compile_commands.json to be splitted",
       {'c', "cdb"});
@@ -113,6 +116,15 @@ void SplitCommand(args::Subparser& parser) {
       _details::parseManifestFiles(manifests, manifest_folder);
   fprintf(stdout, "manifest files vector size: %lu, first element: %s\n",
           manifest_files.size(), manifest_files[0].c_str());
+
+  const std::string aosp_base_path_str = args::get(aosp_base_path);
+  if (!fs::exists(aosp_base_path_str) ||
+      !fs::is_directory(aosp_base_path_str) ||
+      !fs::exists(fs::path(aosp_base_path_str) / ".repo")) {
+    fprintf(stderr, "error parsing aosp base path: %s is illegal\n",
+            aosp_base_path_str.c_str());
+  }
+  fprintf(stdout, "use aosp base path at %s\n", aosp_base_path_str.c_str());
 
   const std::string cdb_file = args::get(CDB_path);
   if (!fs::exists(cdb_file) || !fs::is_regular_file(cdb_file) ||
@@ -136,7 +148,8 @@ void SplitCommand(args::Subparser& parser) {
   fprintf(stdout, "dest_folder path: %s\n\n", dest_folder.c_str());
 
   const auto [elapsed, _] =
-      MeasureRunningTime(DoSplitCommand, manifest_files, cdb_file, dest_folder);
+      MeasureRunningTime(DoSplitCommand, manifest_files, cdb_file, dest_folder,
+                         aosp_base_path_str);
 
   fprintf(
       stdout,
@@ -146,8 +159,8 @@ void SplitCommand(args::Subparser& parser) {
 }  // end of namespace commands
 
 int DoSplitCommand(const std::vector<std::string>& manifest_files,
-                   const std::string& cdb_file,
-                   const std::string& dest_folder) {
+                   const std::string& cdb_file, const std::string& dest_folder,
+                   const std::string& aosp_base_path) {
   Trie trie = BuildFromXMLs(manifest_files);
 
 #ifndef NDEBUG
@@ -233,6 +246,53 @@ int DoSplitCommand(const std::vector<std::string>& manifest_files,
     for (auto& command : command_arr) {
       //   printf("processing command: %s\n", command["file"].GetString());
       const auto prefix = trie.SearchPrefix(command["file"].GetString());
+      if (command.HasMember("directory")) {
+        command["directory"].SetString(
+            (fs::path(aosp_base_path) / prefix).string().data(),
+            doc.GetAllocator());
+      }
+      if (command.HasMember("file")) {
+        const auto& file = command["file"];
+        assert(file.IsString());
+        std::string file_str = file.GetString();
+        std::string prefix_removed =
+            splitter::string_replace(file_str, prefix, ".");
+        command["file"].SetString(prefix_removed.c_str(), doc.GetAllocator());
+      }
+      if (command.HasMember("arguments")) {
+        auto& arguments = command["arguments"];
+        assert(arguments.IsArray());
+
+        bool compiler = true;
+        for (auto& arg : arguments.GetArray()) {
+          assert(arg.IsString());
+          std::string arg_str = arg.GetString();
+
+          if (compiler) {
+            arg.SetString((fs::path(aosp_base_path) / arg_str).string().c_str(),
+                          doc.GetAllocator());
+            compiler = false;
+            continue;
+          }
+
+          if (arg_str.find(prefix) != std::string::npos) {
+            std::string prefix_removed =
+                splitter::string_replace(arg_str, prefix, ".");
+            arg.SetString(prefix_removed.c_str(), doc.GetAllocator());
+            continue;
+          }
+
+          // Check if the argument starts with "-I"
+          if (arg_str.compare(0, 2, "-I") == 0) {
+            fs::path newPath = fs::path(aosp_base_path) / arg_str.substr(2);
+            if (fs::exists(newPath)) {
+              arg.SetString(("-I" + newPath.string()).c_str(),
+                            doc.GetAllocator());
+            }
+          }
+        }
+      }
+
       fs::path commands_dest = fs::path(dest_folder) / prefix;
       const auto commands_dest_str = commands_dest.string();
       if (commands_map.find(commands_dest_str) == commands_map.end()) {
@@ -250,7 +310,6 @@ int DoSplitCommand(const std::vector<std::string>& manifest_files,
         commands_map.begin(), commands_map.end(), [&](const auto& file) {
           const auto& [dest_folder, commands] = file;
           fs::create_directories(dest_folder);
-
           fs::path cdb_dest = fs::path(dest_folder) / "compile_commands.json";
 #ifdef _WIN32
           FILE* fp = fopen(cdb_dest.string().c_str(), "wb");
