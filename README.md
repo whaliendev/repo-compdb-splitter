@@ -135,3 +135,9 @@ it takes 4079 ms to split cdb
 ```
 
 并且会在 position argument 的路径里产生针对各个不同子项目的 compile_commands.json 文件。
+
+---
+
+[GPLv3](LICENSE)
+
+<center>Copyright © 2023 Hwa</center>
